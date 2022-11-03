@@ -1,0 +1,35 @@
+# YAML Doc Referance
+
+# YAML Online parser: 
+#- codebeautify.org/yaml-parser-online  
+#- https://yaml-online-parser.appspot.com/
+---
+# To repeat the code block, use anchors:
+block0:
+  key1: value1
+  subBlock: &ref
+    key2: value2
+
+anotherBlock0: *ref
+
+block1:
+- AB
+- &anchor ABCD
+anotherBlock1:
+- *anchor # Subsequent occurrence
+...
+---
+# multiLines
+scripts:
+- script: |
+    there is
+    a newline
+- script: >
+    there is no newline
+    but there is a space
+- script: |-
+    there is
+    a newline, but not in the end
+- script: >-
+    there is no newline
+    but there is a space. No newline in the end
