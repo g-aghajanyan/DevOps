@@ -1,0 +1,16 @@
+# Update Build Name at runTime
+- script: |
+    echo "##vso[build.updatebuildnumber]$(desc)_$(build.BuildNumber)$(Rev:.r)"
+  displayName: 'Update Build Name'
+
+# Logging Options
+# Ref: https://learn.microsoft.com/en-us/azure/devops/pipelines/scripts/logging-commands?view=azure-devops&tabs=bash
+- script: |
+    echo "##[group]Beginning of a group"
+    echo "##[warning]Warning message"
+    echo "##[error]Error message"
+    echo "##[section]Start of a section"
+    echo "##[debug]Debug text"
+    echo "##[command]Command-line being run"
+    echo "##[endgroup]"
+  displayName: 'Logging Output'
