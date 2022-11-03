@@ -1,0 +1,127 @@
+resources:
+  pipelines:
+  - pipeline: <alias>
+    source: Pipeline/location/name
+    trigger:
+      branches:
+        include:
+          - master
+          - develop
+        tags: ['deploy/all', 'deploy/app1']  # list of tags to evaluate for trigger event, optional
+
+pool:
+  name: On Premise
+
+parameters:
+- name: objetcList
+  type: object
+  default: []
+
+trigger: none
+stages:
+- ${{ if eq(length(parameters.objetcList), 0) }}:
+  - stage: init
+    jobs:
+    - job: 
+      steps:
+      - checkout: none
+      - powershell: |
+          $name = '$(build.buildNumber)_Init'
+          echo "##vso[build.updatebuildnumber]$name"
+        displayName: Update Name
+      - powershell: |
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+          $AzureToken = $env:SYSTEM_ACCESSTOKEN
+          $ref = "refs/heads/azure-pipelines-data"
+
+          #API From where we want to get the objectList
+
+          $Uri = "https://dev.azure.com/TheServicePro/DevOps/_apis/pipelines/307/runs?api-version=6.0-preview.1"
+          $Body = @{
+              "resources" = @{
+                  "repositories" = @{
+                      "self" = @{
+                          "refName" = $ref
+                      }
+                  }
+              }
+              "templateParameters" = @{
+                  "objetcList" =  $objetcList
+              }
+          } | ConvertTo-Json -Depth 3
+          echo "##[section]$Body"
+          $headers = @{Authorization = "Bearer $AzureToken"}
+          try {
+            Invoke-RestMethod -Uri $Uri -ContentType "application/json" -Method Post -Headers $headers -Body $Body
+          } catch {
+            echo "##[error]$_"
+          }
+        displayName: Initialize Deployment
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+- ${{ if ne(length(parameters.objetcList), 0) }}:
+  - stage: DeploytoDEV
+    variables:
+      failed: ''
+      environment: 'DEV'
+      identifier: "DeploytoDEV.deploy.__default"
+    displayName: Deploy to Stage
+    jobs:
+    - job: deploy
+      displayName: Deployment Job
+      dependsOn:
+      steps:
+        - powershell: |
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+            $AzureToken = $env:SYSTEM_ACCESSTOKEN
+
+            $identifier = '$(identifier)'
+            $UriBase = "https://dev.azure.com/COMPANY/PROJECT/_apis/build/builds/$(Build.BuildId)/Timeline?api-version=6.0"
+            $headers = @{Authorization = "Bearer $AzureToken"}
+            $timelines = Invoke-RestMethod -Uri $UriBase -ContentType "application/json" -Method Get -Headers $headers
+
+            $previousAttempts = $timelines.records | Where-Object {$_.type -eq "Job" -and $_.identifier -eq $identifier} | Select-Object id, previousAttempts
+            $lastAttempt = $previousAttempts.previousAttempts[-1].timelineId
+            
+            $UriLastAttempt= "https://dev.azure.com/COMPANY/PROJECT/_apis/build/builds/$(Build.BuildId)/Timeline/$($lastAttempt)?api-version=6.0"
+           
+            $results = Invoke-RestMethod -Uri $UriLastAttempt -ContentType "application/json" -Method Get -Headers $headers
+            $parentID =  $results.records | Where-Object {$_.type -eq "Job" -and $_.identifier -eq $identifier }  | Select-Object id
+            $failures = $results.records | Where-Object {$_.result -eq "failed" -and $_.type -eq "Task"  -and $_.parentId -eq $parentID.id } | Select-Object name
+
+            $names = ''
+
+            foreach ($name in $failures) {
+                $names += "$($name.name) : "
+            }
+            echo "##[debug]The Following objects Failed"
+            echo "##[debug]$names"
+            echo "##vso[task.setvariable variable=failed]$names"
+            echo "##vso[task.setvariable variable=2;isOutput=true]$names"
+          displayName: Evaluate Status
+          name: evaluate
+          condition: and(succeededOrFailed(), ne(variables['System.JobAttempt'], '1'))
+          env:
+            SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+        
+        - script: |
+            echo $(failed)
+            echo ${{variables.failed}}
+            echo $[ evaluate.failed ]
+          condition: succeededOrFailed()
+        
+        - ${{ each object in parameters.objetcList }}:
+          - powershell: |
+              echo "${{ object.objectName }}:${{ object.objectServer }}"
+              echo $(System.StageAttempt)
+              echo $(System.JobAttempt)
+              $ExitCode = Get-Random -InputObject 0, 1
+              Exit $ExitCode
+            displayName: ${{ object.objectName }}
+            name: ${{ object.objectName }}
+            condition: or( 
+                and(succeededOrFailed(), le(variables['System.JobAttempt'], '1')),
+                and(succeededOrFailed(), contains(variables.failed, '${{ object.objectName }}'))
+              )
+            timeoutInMinutes: 3
