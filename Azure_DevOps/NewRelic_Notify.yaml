@@ -1,0 +1,29 @@
+parameters: 
+  - name: DisplayName
+    type: string
+    default: 'Notify NewRelic'
+  - name: XapiKey
+    type: string
+  - name: NewRelicAppID
+    type: string
+
+steps:
+- checkout: none
+- task: PowerShell@2
+  continueOnError: true
+  env:
+    APIKEYNR: ${{ parameters.XapiKey }}
+  displayName: ${{ parameters.DisplayName }}
+  inputs:
+    targetType: 'inline'
+    script: |
+      $deployUrl = "https://api.newrelic.com/v2/applications/${{parameters.NewRelicAppID}}/deployments.json"
+      $body = @{
+        "deployment"= @{
+          "revision" = "$(Build.BuildNumber)"
+          "changelog" = "$(Build.SourceVersionMessage)"
+          "user"= "$(Build.RequestedFor)"
+          }
+      } | ConvertTo-Json
+      Invoke-WebRequest -Uri "$deployUrl" -Method POST -Headers @{'X-Api-Key'="$env:APIKEYNR"} -ContentType 'application/json' -Body $body
+    showWarnings: true
