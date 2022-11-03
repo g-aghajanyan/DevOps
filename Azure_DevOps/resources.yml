@@ -1,0 +1,23 @@
+resources:
+  pipelines:
+    - pipeline: <Alias>
+      source: pipeline/location/name
+      trigger:
+        branches:
+          include:
+            - develop
+            - master
+
+# Pipeline resource variables
+
+# resources.pipeline.<Alias>.projectID
+# resources.pipeline.<Alias>.pipelineName
+# resources.pipeline.<Alias>.pipelineID
+# resources.pipeline.<Alias>.runName
+# resources.pipeline.<Alias>.runID
+# resources.pipeline.<Alias>.runURI
+# resources.pipeline.<Alias>.sourceBranch
+# resources.pipeline.<Alias>.sourceCommit
+# resources.pipeline.<Alias>.sourceProvider
+# resources.pipeline.<Alias>.requestedFor
+# resources.pipeline.<Alias>.requestedForID
