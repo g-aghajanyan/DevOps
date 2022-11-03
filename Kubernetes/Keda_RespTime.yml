@@ -1,0 +1,35 @@
+#KEDA HPA that is using deployment's average response time from prometheous HAProxy metric to initiate scaling.
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: keda-{{ .Release.Name }}
+spec:
+  scaleTargetRef:
+    name: {{ .Release.Name }}
+  pollingInterval: 3
+  cooldownPeriod: 30
+  minReplicaCount: {{ .Values.cd.replicas_min }}
+  maxReplicaCount: {{ .Values.cd.replicas_max }}
+  advanced:                                        
+    restoreToOriginalReplicaCount: true       
+    horizontalPodAutoscalerConfig:                   
+      behavior:                                     
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.keda.stabilizationWindowSecondsDown }}
+          policies:
+          - type: Percent
+            value: 20
+            periodSeconds: 10
+        scaleUp:
+          stabilizationWindowSeconds: 5
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ .Values.keda.promAddress }}
+        metricName: keda_model_average_response
+        query: >
+          (avg(haproxy_backend_total_time_average_seconds{proxy="{{ .Values.namespace }}-{{ .Release.Name }}-srv-http"}) * avg(haproxy_backend_active_servers{proxy="{{ .Values.namespace }}-{{ .Release.Name }}-srv-http"}) * 1000 and 
+          sum(haproxy_backend_current_sessions{proxy="{{ .Values.namespace }}-{{ .Release.Name }}-srv-http"}) > {{ .Values.cd.replicas_min }}) or 
+          sum(haproxy_backend_current_sessions{proxy="{{ .Values.namespace }}-{{ .Release.Name }}-srv-http"}) < {{ .Values.cd.replicas_max }}
+        threshold: '{{ .Values.keda.thresholdMiliseconds }}'
