@@ -1,0 +1,16 @@
+# Specify Multiple hosts in Ingress with Anchors
+rules:
+  - host: host1.tld
+    http: &addr
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: serviceName
+              port:
+                number: 80
+  - host: host2.tld
+    http: *addr
+  - host: host3.tld
+    http: *addr
